@@ -1,0 +1,18 @@
+# Dependencies
+**/node_modules/**
+
+# Compiled output
+out/
+*.js
+*.js.map
+
+# VS Code
+.vscode-test/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
