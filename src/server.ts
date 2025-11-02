@@ -125,7 +125,7 @@ function getSemanticTokens(document: TextDocument): number[] {
   // Parse and execute query
   let query: Query;
   try {
-    query = clickhouseLanguage.query(querySource);
+    query = new Query(clickhouseLanguage, querySource);
   } catch (error) {
     connection.console.error(`Failed to parse query: ${error}`);
     return [];
