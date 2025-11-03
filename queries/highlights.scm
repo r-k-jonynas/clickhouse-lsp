@@ -1,34 +1,5 @@
 ; Highlight queries for ClickHouse grammar
 
-; Keywords
-[
-  "CREATE"
-  "TABLE"
-  "IF"
-  "NOT"
-  "EXISTS"
-  "ENGINE"
-  "DEFAULT"
-  "MATERIALIZED"
-  "ALIAS"
-  "CODEC"
-  "TTL"
-  "COMMENT"
-  "PARTITION"
-  "BY"
-  "ORDER"
-  "PRIMARY"
-  "KEY"
-  "SAMPLE"
-  "SETTINGS"
-  "AND"
-  "OR"
-  "LIKE"
-  "IN"
-  "IS"
-  "CAST"
-] @keyword
-
 ; Data types - primitive
 (primitive_type) @type.builtin
 
