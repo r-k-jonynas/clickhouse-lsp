@@ -63,3 +63,16 @@
   (primitive_type) @type)
 (complex_type
   (complex_type) @type)
+
+; SELECT statement specific
+; Wildcard in SELECT
+(wildcard) @operator
+
+; Table names in FROM clause
+(from_clause
+  (identifier) @variable)
+
+; Column aliases
+(aliased_expression
+  . (_)
+  . (identifier) @variable.member)
