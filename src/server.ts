@@ -20,6 +20,10 @@ const documents = new TextDocuments(TextDocument);
 let parser: Parser | null = null;
 let clickhouseLanguage: Language | null = null;
 
+// Paths to resources (set during initialization)
+let wasmPath: string | null = null;
+let highlightsPath: string | null = null;
+
 // Semantic token types (must match the legend we send to client)
 const tokenTypes = [
   'keyword',
@@ -58,6 +62,17 @@ interface Token {
 }
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
+  // Get paths from initialization options (VS Code)
+  const initOptions = params.initializationOptions as { wasmPath?: string; highlightsPath?: string } | undefined;
+
+  if (initOptions?.wasmPath) {
+    wasmPath = initOptions.wasmPath;
+  }
+
+  if (initOptions?.highlightsPath) {
+    highlightsPath = initOptions.highlightsPath;
+  }
+
   const result: InitializeResult = {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
@@ -79,18 +94,18 @@ connection.onInitialized(async () => {
     await Parser.init();
     parser = new Parser();
 
-    // Load ClickHouse language from WASM file
-    const wasmPath = path.join(__dirname, '../tree-sitter-clickhouse.wasm');
+    // Determine WASM path: use provided path (VS Code) or fall back to default (stdio mode)
+    const resolvedWasmPath = wasmPath || path.join(__dirname, '../parsers/tree-sitter-clickhouse.wasm');
 
-    if (!fs.existsSync(wasmPath)) {
-      connection.console.error(`WASM file not found at: ${wasmPath}`);
-      connection.console.error('Please build the WASM file with: cd ../tree-sitter-clickhouse && npx tree-sitter build --wasm && cp tree-sitter-clickhouse.wasm ../clickhouse-lsp/');
+    if (!fs.existsSync(resolvedWasmPath)) {
+      connection.console.error(`WASM file not found at: ${resolvedWasmPath}`);
+      connection.console.error('Please ensure the WASM file is built and located at the correct path.');
       return;
     }
 
-    clickhouseLanguage = await Language.load(wasmPath);
+    clickhouseLanguage = await Language.load(resolvedWasmPath);
     parser.setLanguage(clickhouseLanguage);
-    connection.console.log('ClickHouse parser initialized successfully');
+    connection.console.log(`ClickHouse parser initialized successfully from: ${resolvedWasmPath}`);
   } catch (error) {
     connection.console.error(`Failed to initialize parser: ${error}`);
   }
@@ -111,14 +126,14 @@ function getSemanticTokens(document: TextDocument): number[] {
 
   const tokens: Token[] = [];
 
-  // Load highlights query
-  const queryPath = path.join(__dirname, '../queries/highlights.scm');
+  // Load highlights query: use provided path (VS Code) or fall back to default (stdio mode)
+  const resolvedHighlightsPath = highlightsPath || path.join(__dirname, '../queries/highlights.scm');
 
   let querySource: string;
   try {
-    querySource = fs.readFileSync(queryPath, 'utf8');
+    querySource = fs.readFileSync(resolvedHighlightsPath, 'utf8');
   } catch (error) {
-    connection.console.error(`Failed to load highlights query: ${error}`);
+    connection.console.error(`Failed to load highlights query from ${resolvedHighlightsPath}: ${error}`);
     return [];
   }
 
