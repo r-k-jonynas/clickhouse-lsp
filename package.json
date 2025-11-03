@@ -5,6 +5,9 @@
   "version": "0.1.0",
   "publisher": "clickhouse",
   "license": "MIT",
+  "bin": {
+    "clickhouse-lsp": "./bin/clickhouse-lsp"
+  },
   "engines": {
     "vscode": "^1.75.0"
   },

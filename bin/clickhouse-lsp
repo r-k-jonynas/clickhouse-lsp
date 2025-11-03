@@ -1,0 +1,6 @@
+#!/usr/bin/env node
+
+// ClickHouse LSP Server Launcher
+// This script starts the LSP server in stdio mode for use with editors
+
+require('../out/server.js');
