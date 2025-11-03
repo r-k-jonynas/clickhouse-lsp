@@ -2,7 +2,7 @@
 
 A minimal Language Server Protocol (LSP) implementation for ClickHouse SQL with syntax highlighting support.
 
-Works with **VS Code, Vim, Neovim, Emacs**, and any other editor that supports LSP.
+Should (?) work with **VS Code (tested), Vim, Neovim, Emacs**, and any other editor that supports LSP.
 
 ## Features
 
