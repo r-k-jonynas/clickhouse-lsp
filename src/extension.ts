@@ -21,6 +21,10 @@ export function activate(context: vscode.ExtensionContext) {
   const highlightsUri = vscode.Uri.joinPath(context.extensionUri, 'queries', 'highlights.scm');
   const highlightsPath = highlightsUri.fsPath;
 
+  // Get clickhouse-format path from configuration
+  const config = vscode.workspace.getConfiguration('clickhouseLsp');
+  const clickhouseFormatPath = config.get<string>('formatPath', 'clickhouse-format');
+
   // Debug options for the server
   const debugOptions = { execArgv: ['--nolazy', '--inspect=6009'] };
 
@@ -44,6 +48,7 @@ export function activate(context: vscode.ExtensionContext) {
     initializationOptions: {
       wasmPath,
       highlightsPath,
+      clickhouseFormatPath,
     },
   };
 

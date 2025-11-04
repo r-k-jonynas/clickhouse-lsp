@@ -28,7 +28,18 @@
         ],
         "configuration": "./language-configuration.json"
       }
-    ]
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "ClickHouse LSP",
+      "properties": {
+        "clickhouseLsp.formatPath": {
+          "type": "string",
+          "default": "clickhouse-format",
+          "description": "Path to clickhouse-format binary. Defaults to searching in PATH."
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

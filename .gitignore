@@ -8,6 +8,7 @@ out/
 
 # VS Code
 .vscode-test/
+.vscode/settings.json
 
 # Logs
 *.log

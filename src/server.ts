@@ -7,11 +7,16 @@ import {
   InitializeResult,
   SemanticTokensBuilder,
   SemanticTokensParams,
+  DocumentFormattingParams,
+  TextEdit,
+  Range,
+  Position,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { Parser, Language, Query } from 'web-tree-sitter';
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawn } from 'child_process';
 
 // Create LSP connection
 const connection = createConnection(ProposedFeatures.all);
@@ -23,6 +28,7 @@ let clickhouseLanguage: Language | null = null;
 // Paths to resources (set during initialization)
 let wasmPath: string | null = null;
 let highlightsPath: string | null = null;
+let clickhouseFormatPath: string = 'clickhouse-format'; // Default to PATH
 
 // Semantic token types (must match the legend we send to client)
 const tokenTypes = [
@@ -63,7 +69,11 @@ interface Token {
 
 connection.onInitialize((params: InitializeParams): InitializeResult => {
   // Get paths from initialization options (VS Code)
-  const initOptions = params.initializationOptions as { wasmPath?: string; highlightsPath?: string } | undefined;
+  const initOptions = params.initializationOptions as {
+    wasmPath?: string;
+    highlightsPath?: string;
+    clickhouseFormatPath?: string;
+  } | undefined;
 
   if (initOptions?.wasmPath) {
     wasmPath = initOptions.wasmPath;
@@ -71,6 +81,10 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 
   if (initOptions?.highlightsPath) {
     highlightsPath = initOptions.highlightsPath;
+  }
+
+  if (initOptions?.clickhouseFormatPath) {
+    clickhouseFormatPath = initOptions.clickhouseFormatPath;
   }
 
   const result: InitializeResult = {
@@ -83,6 +97,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
         },
         full: true,
       },
+      documentFormattingProvider: true,
     },
   };
   return result;
@@ -205,6 +220,128 @@ connection.onRequest('textDocument/semanticTokens/full', (params: SemanticTokens
 
   const tokens = getSemanticTokens(document);
   return { data: tokens };
+});
+
+// Parse clickhouse-format error messages to make them more user-friendly
+function parseClickHouseError(stderr: string): string {
+  // Example error formats:
+  // 1. Code: 62. DB::Exception: Syntax error (query): failed at position 38 (created) (line 3, col 5): created DateTime
+  // 2. Code: 62. DB::Exception: Syntax error (query): failed at position 26 (status): status = 'active'
+
+  // Try to extract line/column and problematic token
+  const lineColMatch = stderr.match(/\(line (\d+), col (\d+)\)/);
+  const tokenMatch = stderr.match(/failed at position \d+ \(([^)]+)\)/);
+  const positionMatch = stderr.match(/failed at position (\d+)/);
+
+  // Best case: we have line, column, and token
+  if (lineColMatch && tokenMatch) {
+    const [, line, col] = lineColMatch;
+    const token = tokenMatch[1];
+    return `Syntax error at line ${line}, column ${col}: unexpected '${token}'`;
+  }
+
+  // Good case: we have token but no line/col
+  if (tokenMatch) {
+    const token = tokenMatch[1];
+    return `Syntax error: unexpected '${token}'`;
+  }
+
+  // Fallback case: we have position but no details
+  if (positionMatch) {
+    const position = positionMatch[1];
+    return `Syntax error at position ${position}`;
+  }
+
+  // Last resort: show the first line of the exception
+  const exceptionMatch = stderr.match(/DB::Exception: (.+?)(?=\.|$)/);
+  if (exceptionMatch) {
+    return exceptionMatch[1];
+  }
+
+  // Ultimate fallback: just show first line, stripped of code
+  const firstLine = stderr.split('\n')[0].replace(/^Code: \d+\.\s*/, '');
+  return `Formatting failed: ${firstLine || 'Unknown error'}`;
+}
+
+// Format document using clickhouse-format
+async function formatDocument(document: TextDocument): Promise<TextEdit[]> {
+  const text = document.getText();
+
+  return new Promise((resolve) => {
+    const process = spawn(clickhouseFormatPath, [], {
+      timeout: 5000, // 5 second timeout
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    process.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    process.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    process.on('error', (error: NodeJS.ErrnoException) => {
+      connection.console.error(`clickhouse-format spawn error: ${error.message}`);
+
+      // Check if binary is not found
+      if (error.code === 'ENOENT') {
+        connection.window.showErrorMessage(
+          `clickhouse-format not found. Please install ClickHouse or configure the binary path in settings.`
+        );
+      } else {
+        connection.window.showErrorMessage(
+          `Failed to run clickhouse-format: ${error.message}`
+        );
+      }
+      resolve([]);
+    });
+
+    process.on('close', (code) => {
+      if (code !== 0) {
+        connection.console.error(`clickhouse-format exited with code ${code}: ${stderr}`);
+
+        // Parse clickhouse-format error for better user message
+        const errorMsg = parseClickHouseError(stderr);
+        connection.window.showErrorMessage(errorMsg);
+        resolve([]);
+        return;
+      }
+
+      if (stderr.trim()) {
+        connection.console.warn(`clickhouse-format stderr: ${stderr}`);
+      }
+
+      // Return a single TextEdit that replaces the entire document
+      const lastLine = document.lineCount - 1;
+      const lastChar = document.getText().split('\n')[lastLine]?.length || 0;
+
+      resolve([
+        TextEdit.replace(
+          Range.create(
+            Position.create(0, 0),
+            Position.create(lastLine, lastChar)
+          ),
+          stdout
+        ),
+      ]);
+    });
+
+    // Write the document text to stdin
+    process.stdin.write(text);
+    process.stdin.end();
+  });
+}
+
+connection.onDocumentFormatting(async (params: DocumentFormattingParams): Promise<TextEdit[]> => {
+  const document = documents.get(params.textDocument.uri);
+  if (!document) {
+    return [];
+  }
+
+  return formatDocument(document);
 });
 
 // Listen for document changes
