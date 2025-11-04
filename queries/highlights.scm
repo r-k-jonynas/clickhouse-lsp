@@ -68,9 +68,14 @@
 ; Wildcard in SELECT
 (wildcard) @operator
 
-; Table names in FROM clause
+; Table names in FROM clause (now using qualified_table_name)
 (from_clause
-  (identifier) @variable)
+  (qualified_table_name
+    (identifier) @variable))
+
+; WITH clause and CTEs
+(cte
+  . (identifier) @variable.member)  ; CTE name
 
 ; Column aliases
 (aliased_expression
